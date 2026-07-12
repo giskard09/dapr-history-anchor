@@ -1,0 +1,9 @@
+# compiled Go binaries
+/produce
+/verifyformat
+*.exe
+
+# never commit secrets
+*.env
+*.pass
+*.key

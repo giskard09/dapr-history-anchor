@@ -1,0 +1,13 @@
+{
+  "description": "On-chain anchor of the Dapr history-chain head produced in this repo.",
+  "provenance_disclaimer": "The anchored ref is SHA-256 of a HistorySignature produced by Dapr's durabletask-go v0.12.1 signing library with a locally-minted SPIFFE identity and synthetic events. NOT produced by a running Dapr runtime; no adoption or endorsement by Dapr/Diagrid is implied.",
+  "anchor_ref_bytes32": "0xe2883741562df2096aec27ce2ffa26e157d2898ac9ec444d245b39b6c8f0efea",
+  "registry": "0x49fEcA52bC634a9Ab773226D16619deC547794aa",
+  "chain": "Base mainnet (chainId 8453)",
+  "function": "anchor(bytes32)",
+  "event": "Anchored(bytes32 indexed ref, address indexed anchoredBy, uint256 timestamp)",
+  "tx": "0x8702287dca01fb5faa76ec8c95b67322d2f685e634747ba9177082bd72c50a39",
+  "block": 48545657,
+  "anchored_by": "Rama operator wallet",
+  "anchored_at_utc": "2026-07-12T18:24:34Z"
+}
