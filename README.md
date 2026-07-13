@@ -51,6 +51,45 @@ check, and a silent rewind becomes externally detectable.
                                                  timestamp / finality
 ```
 
+## Fork / rewind detection
+
+`dapr/dapr#10191` raised a real gap: if an operator exports two signed heads
+for the same workflow instance, a verifier needs more than the head digest to
+decide whether the second head **extends**, **forks from**, or **replaces**
+the first (the rewind / continue-as-new / compaction case). The
+`previousSignatureDigest` Dapr already embeds in every `HistorySignature`
+answers this — but this repo didn't expose it as a first-class, checkable
+field, and didn't demonstrate the scenario.
+
+Both are fixed now:
+
+- `manifest.json` and `manifest_fork.json` expose
+  `predecessor_signature_digest_hex` (empty string for a root/genesis
+  signature) and `sequence_range` (`start_event_index`, `event_count`) as
+  top-level fields, taken directly from the persisted `HistorySignature`.
+- `manifest_fork.json` is a **second, sibling head**: same predecessor claim
+  as `manifest.json` (genesis — no predecessor) and the same `sequence_range`
+  (start 0, 2 events), same genesis event (`ExecutionStarted`), but a
+  rewritten terminal event — `COMPLETED`/"shipped" (head A) vs.
+  `FAILED`/"payment declined" (head B). Both are independently valid,
+  self-verifying Dapr `HistorySignature`s (see `cmd/verifyformat`). A
+  verifier who only has the two heads cannot tell which is the "true" outcome
+  from the signature chain alone.
+- `verifier/verify.py --relation` recomputes both heads from the raw
+  persisted bytes, confirms each is anchored on-chain, and classifies the
+  relation between them using only `predecessor_signature_digest_hex` +
+  `sequence_range`:
+  - **extend** — B's predecessor equals A's head and B's range starts where
+    A's ends (legitimate continuation).
+  - **replace** — same predecessor and identical range, different head
+    (silent full rewrite of the same extent).
+  - **fork** — same predecessor, different range (diverging continuations
+    from the same point).
+
+  For this repo's committed pair, the classification is **replace**.
+- `scripts/anchor.sh fork` anchors head B the same way head A was anchored
+  (same `AnchorRegistry`, same `anchor(bytes32)`, second real transaction).
+
 ## Doctrine: format-agnostic anchoring
 
 We anchor Dapr's digest **bytes32 as-is**. We do **not** ask Dapr to adopt any
@@ -72,16 +111,21 @@ the added property.
 ## Reproduce
 
 ```bash
-# 1. produce a fresh instance (new key + timestamps => new valid head)
+# 1. produce head A (loaded as-is if artifacts/ already has a committed
+#    instance — never re-minted, to stay byte-identical to what's anchored)
+#    and head B, the fork (always freshly minted)
 go run ./cmd/produce ./artifacts
 
-# 2. prove the artifact is a valid Dapr history signature
-go run ./cmd/verifyformat ./artifacts
+# 2. prove each artifact is a valid Dapr history signature
+go run ./cmd/verifyformat ./artifacts        # head A
+go run ./cmd/verifyformat ./artifacts fork   # head B
 
-# 3. anchor its head on Base mainnet (see scripts/anchor.sh)
+# 3. anchor each head on Base mainnet (see scripts/anchor.sh)
+scripts/anchor.sh        # head A
+scripts/anchor.sh fork   # head B
 
-# 4. independently verify the on-chain anchor
-python3 verifier/verify.py
+# 4. independently verify both on-chain anchors and their relation
+python3 verifier/verify.py --relation
 ```
 
 Each `produce` run mints a fresh Ed25519 signing key and current timestamps, so
@@ -96,7 +140,7 @@ anchored on-chain; the verifiers check *that* instance.
 - **Function:** `anchor(bytes32 ref)` — permissionless, no owner/roles/funds.
 - **Event:** `Anchored(bytes32 indexed ref, address indexed anchoredBy, uint256 timestamp)`.
 - The anchored `ref` for this instance and its tx/block are in
-  `artifacts/anchor.json`.
+  `artifacts/anchor.json`. Head B's (the fork) are in `artifacts/anchor_fork.json`.
 
 ## Licenses
 

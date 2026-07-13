@@ -1,0 +1,25 @@
+{
+  "anchor_chain": "Base mainnet (chainId 8453)",
+  "anchor_ref_bytes32": "0x5a929330a66b5998f47621f63f0340f7178ee502b756c9cdbc4f4a8cd8ec0d6c",
+  "anchor_registry": "0x49fEcA52bC634a9Ab773226D16619deC547794aa",
+  "certificate_index": 0,
+  "chain_head_digest_hex": "5a929330a66b5998f47621f63f0340f7178ee502b756c9cdbc4f4a8cd8ec0d6c",
+  "dapr_module": "github.com/dapr/durabletask-go@v0.12.1",
+  "description": "Dapr Verifiable Execution history signature — SIBLING head to manifest.json: same predecessor claim (genesis, no predecessor) and same sequence_range, rewritten terminal event. Demonstrates the rewind/fork scenario raised in dapr/dapr#10191 by 0xbrainkid: a history-signature chain alone cannot distinguish which of two validly-signed heads sharing the same predecessor and sequence_range is the 'true' one.",
+  "event_count": 2,
+  "events_digest_hex": "248c4a17122b39352fa200b9bc37b9aaab6f31b95ecac474944953ae20ee63e6",
+  "generated_at_utc": "2026-07-13T10:00:03Z",
+  "predecessor_signature_digest_hex": "",
+  "provenance": "Produced by Dapr durabletask-go v0.12.1 historysigning.Sign(). SPIFFE SVID minted locally (spiffe://mycelium.demo), NOT SPIRE-issued, independent key from head A (a rotated/second operator identity is the more adversarial case; the predecessor+range collision does not depend on key reuse). Genesis event (ExecutionStarted, same workflow/input) reproduced; only the terminal event differs: COMPLETED/shipped (head A, manifest.json) vs FAILED/payment-declined (head B, this file). Worked example, not captured from a running Dapr cluster.",
+  "raw_signature_hex": "10022220248c4a17122b39352fa200b9bc37b9aaab6f31b95ecac474944953ae20ee63e6324040c099d63ba29e3d8208907cf3110281d2b7b21df0f1ce14f68c9bebff65300ee041c98034c274e85f4827e31f34c19140f6c1d15a681a8f49a005c1ead7c706",
+  "raw_signature_len": 102,
+  "relation_to_head_a": "fork (identical predecessor_signature_digest_hex and sequence_range as manifest.json's head, different chain_head_digest_hex)",
+  "self_verify": "PASS (historysigning.VerifySignature)",
+  "sequence_range": {
+    "event_count": 2,
+    "start_event_index": 0
+  },
+  "sibling_of_chain_head_digest_hex": "e2883741562df2096aec27ce2ffa26e157d2898ac9ec444d245b39b6c8f0efea",
+  "signature_algorithm": "Ed25519 over SHA-256(previousSignatureDigest || eventsDigest)",
+  "start_event_index": 0
+}

@@ -15,6 +15,33 @@ in anchor.json only tells the verifier *where* to look — the cryptographic bin
 
 Usage:
     python3 verify.py [--rpc URL] [--artifacts DIR]
+
+With --relation, also checks a SECOND anchored head (the "fork" head,
+artifacts/history_signature_fork.bin + manifest_fork.json + anchor_fork.json)
+and classifies the relationship between the two anchored heads:
+
+    python3 verify.py --relation [--rpc URL] [--artifacts DIR]
+
+Classification rule (given two HistorySignature manifests A and B, each
+carrying predecessor_signature_digest_hex and sequence_range
+{start_event_index, event_count}):
+
+  extend  — B.predecessor_signature_digest_hex == SHA-256(A.raw_signature),
+            and B.start_event_index == A.start_event_index + A.event_count.
+            B is a legitimate continuation of A.
+  replace — A and B share predecessor_signature_digest_hex AND identical
+            sequence_range (same start_event_index, same event_count), but
+            different chain_head_digest_hex. Same claimed extent, silently
+            different content — a full rewrite of the same range.
+  fork    — A and B share predecessor_signature_digest_hex but their
+            sequence_range differs (different start_event_index and/or
+            event_count). Diverging continuations from the same point.
+  unrelated — none of the above.
+
+This is exactly the ambiguity 0xbrainkid raised in dapr/dapr#10191: the
+history-signature chain alone cannot tell these apart. Anchoring both heads
+externally makes the relation computable by a verifier who saw neither being
+produced.
 """
 import argparse
 import hashlib
@@ -42,41 +69,37 @@ def rpc(url, method, params):
     return out["result"]
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--rpc", default=os.environ.get("BASE_RPC", DEFAULT_RPC))
-    ap.add_argument("--artifacts", default=os.path.join(os.path.dirname(__file__), "..", "artifacts"))
-    args = ap.parse_args()
+def verify_one(art, rpc_url, suffix=""):
+    """Recompute a head's digest and confirm its on-chain anchor. Returns
+    (digest_hex, manifest_dict, log_dict)."""
+    sig_name = f"history_signature{suffix}.bin"
+    manifest_name = f"manifest{suffix}.json"
+    anchor_name = f"anchor{suffix}.json"
 
-    art = os.path.abspath(args.artifacts)
-
-    # 1 + 2. recompute the chain head ourselves from the raw persisted bytes.
-    with open(os.path.join(art, "history_signature.bin"), "rb") as f:
+    with open(os.path.join(art, sig_name), "rb") as f:
         raw_sig = f.read()
     digest = hashlib.sha256(raw_sig).hexdigest()
     ref = "0x" + digest
-    print(f"raw HistorySignature : {len(raw_sig)} bytes")
-    print(f"recomputed head      : {ref}   (SHA-256 of rawSig)")
+    print(f"raw HistorySignature ({sig_name}) : {len(raw_sig)} bytes")
+    print(f"recomputed head                    : {ref}   (SHA-256 of rawSig)")
 
-    # cross-check against the manifest the producer wrote (optional, informational).
+    man = {}
     try:
-        with open(os.path.join(art, "manifest.json")) as f:
+        with open(os.path.join(art, manifest_name)) as f:
             man = json.load(f)
         if man.get("chain_head_digest_hex") != digest:
-            print("WARN: manifest digest disagrees with recomputed digest")
+            print(f"WARN: {manifest_name} digest disagrees with recomputed digest")
     except FileNotFoundError:
         pass
 
-    # 3. find the on-chain anchor for exactly this ref.
-    with open(os.path.join(art, "anchor.json")) as f:
+    with open(os.path.join(art, anchor_name)) as f:
         anchor = json.load(f)
     hint = int(anchor["block"])
-    head = int(rpc(args.rpc, "eth_blockNumber", []), 16)
+    head = int(rpc(rpc_url, "eth_blockNumber", []), 16)
     from_block = hex(max(0, hint - 25))
-    to_block = hex(min(hint + 25, head))  # public RPCs reject toBlock beyond head
+    to_block = hex(min(hint + 25, head))
 
-    # topics = [Anchored, ref]  -> only anchors of *our* recomputed digest match.
-    logs = rpc(args.rpc, "eth_getLogs", [{
+    logs = rpc(rpc_url, "eth_getLogs", [{
         "address": ANCHOR_REGISTRY,
         "fromBlock": from_block,
         "toBlock": to_block,
@@ -88,14 +111,61 @@ def main():
         sys.exit(1)
 
     log = logs[0]
-    ts = int(log["data"], 16)  # single non-indexed arg: uint256 timestamp
+    ts = int(log["data"], 16)
     anchored_by = "0x" + log["topics"][2][-40:]
-    print(f"\non-chain match       : AnchorRegistry {ANCHOR_REGISTRY} (Base 8453)")
-    print(f"  tx                 : {log['transactionHash']}")
-    print(f"  block              : {int(log['blockNumber'], 16)}")
-    print(f"  anchoredBy         : {anchored_by}")
-    print(f"  block timestamp    : {ts}")
-    print("\nPASS: the recomputed Dapr history-signature head is anchored on-chain.")
+    print(f"on-chain match                     : AnchorRegistry {ANCHOR_REGISTRY} (Base 8453)")
+    print(f"  tx                                : {log['transactionHash']}")
+    print(f"  block                             : {int(log['blockNumber'], 16)}")
+    print(f"  anchoredBy                        : {anchored_by}")
+    print(f"  block timestamp                   : {ts}")
+    print(f"PASS: recomputed head is anchored on-chain.\n")
+
+    return digest, man, log
+
+
+def classify_relation(digest_a, man_a, digest_b, man_b):
+    """Classify B relative to A using predecessor_signature_digest_hex and
+    sequence_range only — no trust in either manifest's prose fields."""
+    pred_a = man_a.get("predecessor_signature_digest_hex", "")
+    pred_b = man_b.get("predecessor_signature_digest_hex", "")
+    range_a = man_a.get("sequence_range", {})
+    range_b = man_b.get("sequence_range", {})
+    start_a, count_a = range_a.get("start_event_index"), range_a.get("event_count")
+    start_b, count_b = range_b.get("start_event_index"), range_b.get("event_count")
+
+    if pred_b == digest_a and start_b == start_a + count_a:
+        return "extend", "B's predecessor_signature_digest_hex equals A's recomputed head, and B's sequence_range starts exactly where A's ends. B is a legitimate continuation of A."
+    if pred_a == pred_b and start_a == start_b and count_a == count_b:
+        return "replace", "A and B share predecessor_signature_digest_hex AND identical sequence_range, but different chain_head_digest_hex. Same claimed extent, silently different content."
+    if pred_a == pred_b:
+        return "fork", "A and B share predecessor_signature_digest_hex but their sequence_range differs. Diverging continuations from the same point."
+    return "unrelated", "No shared predecessor/sequence relation found between A and B."
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--rpc", default=os.environ.get("BASE_RPC", DEFAULT_RPC))
+    ap.add_argument("--artifacts", default=os.path.join(os.path.dirname(__file__), "..", "artifacts"))
+    ap.add_argument("--relation", action="store_true",
+                     help="also verify the fork head and classify its relation to the primary head")
+    args = ap.parse_args()
+
+    art = os.path.abspath(args.artifacts)
+
+    print("=== head A ===")
+    digest_a, man_a, _ = verify_one(art, args.rpc)
+
+    if not args.relation:
+        print("PASS: the recomputed Dapr history-signature head is anchored on-chain.")
+        return
+
+    print("=== head B (fork) ===")
+    digest_b, man_b, _ = verify_one(art, args.rpc, suffix="_fork")
+
+    relation, reason = classify_relation(digest_a, man_a, digest_b, man_b)
+    print("=== relation ===")
+    print(f"A -> B : {relation.upper()}")
+    print(f"reason : {reason}")
 
 
 if __name__ == "__main__":

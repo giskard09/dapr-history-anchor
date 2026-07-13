@@ -1,0 +1,14 @@
+{
+  "description": "On-chain anchor of head B (the fork/rewind head) — sibling of the head anchored in anchor.json, same predecessor claim (genesis) and sequence_range, rewritten terminal event.",
+  "provenance_disclaimer": "The anchored ref is SHA-256 of a HistorySignature produced by Dapr's durabletask-go v0.12.1 signing library with a locally-minted (independent) SPIFFE identity and synthetic events. NOT produced by a running Dapr runtime; no adoption or endorsement by Dapr/Diagrid is implied.",
+  "anchor_ref_bytes32": "0x5a929330a66b5998f47621f63f0340f7178ee502b756c9cdbc4f4a8cd8ec0d6c",
+  "registry": "0x49fEcA52bC634a9Ab773226D16619deC547794aa",
+  "chain": "Base mainnet (chainId 8453)",
+  "function": "anchor(bytes32)",
+  "event": "Anchored(bytes32 indexed ref, address indexed anchoredBy, uint256 timestamp)",
+  "tx": "0x6c46d37d63cb920bb38bc2952dd941387729abb7ae95c427adb2c32a34d735a5",
+  "block": 48573841,
+  "anchored_by": "Rama operator wallet",
+  "relation_to_anchor_json": "fork (same predecessor_signature_digest_hex and sequence_range as anchor.json's head; classified 'replace' by verifier/verify.py --relation since the sequence_range is identical)",
+  "anchored_at_utc": "2026-07-13T10:03:49Z"
+}

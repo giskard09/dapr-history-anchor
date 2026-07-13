@@ -31,6 +31,27 @@ is fuzzy.
   exercising Dapr's signing library directly, not a recording of production
   Dapr output.
 
+## Head B (the fork/rewind head)
+
+- `artifacts/history_signature_fork.bin` and `manifest_fork.json` are a
+  **second, independently minted** instance: a fresh SPIFFE SVID (own key,
+  own cert — `signing_cert_fork.der`), same `historysigning.Sign()` path,
+  same genesis event content (`ExecutionStarted`, same workflow/input) as
+  head A, but a rewritten terminal event and consequently a different
+  `chain_head_digest_hex`.
+- It shares head A's predecessor claim (genesis — `PreviousSignatureRaw`
+  nil) and `sequence_range` (`start_event_index` 0, `event_count` 2)
+  by construction, not by chance: this is the synthetic "operator re-signs
+  an alternate history from the same point" scenario, not a byte-for-byte
+  clone of head A.
+- Using an independent key for head B rather than reusing head A's is a
+  deliberate, declared choice: the predecessor/range collision this repo
+  demonstrates does not depend on key reuse, and a rotated or different
+  signing identity is the more adversarial (and more general) case to show.
+- Both heads individually re-verify with Dapr's own
+  `historysigning.VerifySignature()` (`cmd/verifyformat`). Neither is more
+  "valid" than the other by the signature chain alone — that is the point.
+
 ## What this therefore does and does not show
 
 - **Does show:** the anchoring layer works against Dapr's *actual public

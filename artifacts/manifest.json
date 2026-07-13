@@ -9,10 +9,15 @@
   "event_count": 2,
   "events_digest_hex": "a8965ce8f287042c77252c4cb7c20b5e85aa00beb28102a78081d537b6360cdc",
   "generated_at_utc": "2026-07-12T18:14:00Z",
+  "predecessor_signature_digest_hex": "",
   "provenance": "Produced by Dapr durabletask-go v0.12.1 historysigning.Sign(). SPIFFE SVID minted locally (spiffe://mycelium.demo), NOT SPIRE-issued. Synthetic workflow events. Worked example, not captured from a running Dapr cluster.",
   "raw_signature_hex": "10022220a8965ce8f287042c77252c4cb7c20b5e85aa00beb28102a78081d537b6360cdc3240bc133f9f166974157719c93a5ae046462e39ae67bfabd96deb73b6546dbdcc325912a08df710e166ab1077f1dacf962f3e8c8b8e6099143c0018817989aacc02",
   "raw_signature_len": 102,
   "self_verify": "PASS (historysigning.VerifySignature)",
+  "sequence_range": {
+    "event_count": 2,
+    "start_event_index": 0
+  },
   "signature_algorithm": "Ed25519 over SHA-256(previousSignatureDigest || eventsDigest)",
   "start_event_index": 0
 }

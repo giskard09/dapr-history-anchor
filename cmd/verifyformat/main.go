@@ -33,11 +33,18 @@ func main() {
 	if len(os.Args) > 1 {
 		dir = os.Args[1]
 	}
+	// Optional third arg selects an artifact set by filename suffix, e.g.
+	// "fork" reads history_signature_fork.bin / event_0_fork.bin / etc.
+	// Empty (default) reads the unsuffixed head-A set.
+	suffix := ""
+	if len(os.Args) > 2 {
+		suffix = "_" + os.Args[2]
+	}
 
-	rawSig := read(dir, "history_signature.bin")
-	raw0 := read(dir, "event_0.bin")
-	raw1 := read(dir, "event_1.bin")
-	certDER := read(dir, "signing_cert.der")
+	rawSig := read(dir, "history_signature"+suffix+".bin")
+	raw0 := read(dir, "event_0"+suffix+".bin")
+	raw1 := read(dir, "event_1"+suffix+".bin")
+	certDER := read(dir, "signing_cert"+suffix+".der")
 
 	var sig protos.HistorySignature
 	if err := proto.Unmarshal(rawSig, &sig); err != nil {
